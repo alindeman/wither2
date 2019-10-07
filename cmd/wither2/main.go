@@ -17,8 +17,10 @@ import (
 var (
 	app = kingpin.New("wither2", "Minecraft <-> Slack bridge")
 
-	ingest          = app.Command("ingest", "Ingest Minecraft logs, forwarding relevant messages to Slack")
-	slackWebhookURL = ingest.Flag("slack-webhook-url", "Slack webhook URL").Envar("SLACK_WEBHOOK_URL").Required().String()
+	ingest                  = app.Command("ingest", "Ingest Minecraft logs, forwarding relevant messages to Slack")
+	slackWebhookURL         = ingest.Flag("slack-webhook-url", "Slack webhook URL").Envar("SLACK_WEBHOOK_URL").Required().String()
+	slackWebhookTimeout     = ingest.Flag("slack-webhook-timeout", "Timeout for each Slack webhook request").Envar("SLACK_WEBHOOK_TIMEOUT").Default("5s").Duration()
+	discardDurationInterval = ingest.Flag("discard-duration-interval", "Log messages will be discarded if they are more than this duration in the past or future").Envar("DISCARD_DURATION_INTERVAL").Default("1m").Duration()
 )
 
 func main() {
@@ -50,8 +52,15 @@ func runIngest(ctx context.Context) error {
 			continue
 		}
 
+		now := time.Now()
+		diff := now.Sub(msg.Timestamp)
+		if diff < -*discardDurationInterval || diff > *discardDurationInterval {
+			fmt.Fprintf(os.Stderr, "skipping message too far into past/future: %v\n", scanner.Text())
+			continue
+		}
+
 		if strings.HasPrefix(msg.Message, "<") || strings.HasSuffix(msg.Message, "joined the game") || strings.HasSuffix(msg.Message, "left the game") {
-			cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			cctx, cancel := context.WithTimeout(ctx, *slackWebhookTimeout)
 
 			if err := slackClient.Post(cctx, msg.Message); err != nil {
 				fmt.Fprintf(os.Stderr, "error posting to Slack: %v\n", err)

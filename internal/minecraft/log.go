@@ -28,6 +28,12 @@ func ParseLogMessage(line string) (*LogMessage, error) {
 		return nil, err
 	}
 
+	// Assume all times are from today. This is definitely not a correct
+	// assumption in all cases, but it's the best we can do with the
+	// information we have.
+	now := time.Now()
+	ts = time.Date(now.Year(), now.Month(), now.Day(), ts.Hour(), ts.Minute(), ts.Second(), 0, time.UTC)
+
 	return &LogMessage{
 		Timestamp: ts,
 		Source:    sm[2],
