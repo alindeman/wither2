@@ -27,15 +27,16 @@ var (
 	slackWebhookTimeout     = ingest.Flag("slack-webhook-timeout", "Timeout for each Slack webhook request").Envar("SLACK_WEBHOOK_TIMEOUT").Default("5s").Duration()
 	discardDurationInterval = ingest.Flag("discard-duration-interval", "Log messages will be discarded if they are more than this duration in the past or future").Envar("DISCARD_DURATION_INTERVAL").Default("1m").Duration()
 
-	server          = app.Command("server", "Serve an endpoint for Slack outgoing webhooks, forwarding relevant messages to Minecraft")
-	addr            = server.Flag("addr", "Address to listen on").Envar("ADDR").Default("127.0.0.1").String()
-	port            = server.Flag("port", "Port to listen on").Envar("PORT").Default("8080").Int()
-	rconDialTimeout = server.Flag("rcon-dial-timeout", "RCON dial timeout").Envar("RCON_DIAL_TIMEOUT").Default("10s").Duration()
-	rconTimeout     = server.Flag("rcon-timeout", "RCON timeout for login and commands").Envar("RCON_TIMEOUT").Default("10s").Duration()
-	rconIP          = server.Flag("rcon-ip", "RCON IP address").Envar("RCON_IP").Default("127.0.0.1").String()
-	rconPort        = server.Flag("rnon-port", "RCON port").Envar("RCON_PORT").Default("25575").Int()
-	rconPassword    = server.Flag("rcon-password", "RCON password").Envar("RCON_PASSWORD").Default("minecraft").String()
-	slackToken      = server.Flag("slack-token", "Slack token for outgoing webhook").Envar("SLACK_TOKEN").Required().String()
+	server           = app.Command("server", "Serve an endpoint for Slack outgoing webhooks, forwarding relevant messages to Minecraft")
+	addr             = server.Flag("addr", "Address to listen on").Envar("ADDR").Default("127.0.0.1").String()
+	port             = server.Flag("port", "Port to listen on").Envar("PORT").Default("8080").Int()
+	rconDialTimeout  = server.Flag("rcon-dial-timeout", "RCON dial timeout").Envar("RCON_DIAL_TIMEOUT").Default("10s").Duration()
+	rconTimeout      = server.Flag("rcon-timeout", "RCON timeout for login and commands").Envar("RCON_TIMEOUT").Default("10s").Duration()
+	rconIP           = server.Flag("rcon-ip", "RCON IP address").Envar("RCON_IP").Default("127.0.0.1").String()
+	rconPort         = server.Flag("rnon-port", "RCON port").Envar("RCON_PORT").Default("25575").Int()
+	rconPassword     = server.Flag("rcon-password", "RCON password").Envar("RCON_PASSWORD").Default("minecraft").String()
+	slackToken       = server.Flag("slack-token", "Slack token for outgoing webhook").Envar("SLACK_TOKEN").Required().String()
+	slackIgnoreUsers = server.Flag("slack-ignore-users", "Slack users to ignore").Envar("SLACK_IGNORE_USERS").Default("slackbot").Strings()
 )
 
 func main() {
@@ -115,7 +116,7 @@ func runServer(ctx context.Context) error {
 
 	server := &http.Server{
 		Addr:    fmt.Sprintf("%s:%d", *addr, *port),
-		Handler: rconSlackForwarderHandler(minecraftClient, *slackToken),
+		Handler: rconSlackForwarderHandler(minecraftClient, *slackToken, *slackIgnoreUsers),
 	}
 
 	errC := make(chan error)
@@ -139,7 +140,7 @@ func dialRCON(ctx context.Context) (net.Conn, error) {
 	return d.DialContext(dctx, "tcp", fmt.Sprintf("%s:%d", *rconIP, *rconPort))
 }
 
-func rconSlackForwarderHandler(client *minecraft.Client, slackToken string) http.Handler {
+func rconSlackForwarderHandler(client *minecraft.Client, slackToken string, slackIgnoreUsers []string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -151,6 +152,13 @@ func rconSlackForwarderHandler(client *minecraft.Client, slackToken string) http
 		if payload.Token != slackToken {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
+		}
+
+		for _, ignoreUser := range slackIgnoreUsers {
+			if ignoreUser == payload.UserName {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
 		}
 
 		text := fmt.Sprintf("<%s on slack> %s", payload.UserName, payload.Text)
