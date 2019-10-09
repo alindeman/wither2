@@ -146,20 +146,16 @@ func rconSlackForwarderHandler(client *minecraft.Client, slackToken string) http
 			return
 		}
 
-		payload, err := slack.ParseWebhookPayload(r.Body)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to parse webhook payload: %v\n", err)
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
+		payload := slack.ParseWebhookPayload(r)
 
 		if payload.Token != slackToken {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
+		text := fmt.Sprintf("<%s on slack> %s", payload.UserName, payload.Text)
 		msg, err := json.Marshal(map[string]interface{}{
-			"text": payload.Text,
+			"text": text,
 		})
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)

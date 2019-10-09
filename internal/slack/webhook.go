@@ -1,9 +1,7 @@
 package slack
 
 import (
-	"bufio"
-	"io"
-	"strings"
+	"net/http"
 )
 
 type WebhookPayload struct {
@@ -12,29 +10,10 @@ type WebhookPayload struct {
 	Text     string
 }
 
-func ParseWebhookPayload(r io.Reader) (*WebhookPayload, error) {
-	payload := new(WebhookPayload)
-
-	scanner := bufio.NewScanner(r)
-	for scanner.Scan() {
-		parts := strings.SplitN(scanner.Text(), "=", 2)
-		if len(parts) < 2 {
-			continue
-		}
-
-		switch parts[0] {
-		case "token":
-			payload.Token = parts[1]
-		case "user_name":
-			payload.UserName = parts[1]
-		case "text":
-			payload.Text = parts[1]
-		}
+func ParseWebhookPayload(r *http.Request) *WebhookPayload {
+	return &WebhookPayload{
+		Token:    r.FormValue("token"),
+		UserName: r.FormValue("user_name"),
+		Text:     r.FormValue("text"),
 	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-
-	return payload, nil
 }
