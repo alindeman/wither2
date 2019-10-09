@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -89,7 +88,7 @@ func runIngest(ctx context.Context) error {
 			continue
 		}
 
-		if strings.HasPrefix(msg.Message, "<") || strings.HasSuffix(msg.Message, "joined the game") || strings.HasSuffix(msg.Message, "left the game") {
+		if minecraft.IsChatMessage(msg.Message) || minecraft.IsJoinLeaveMessage(msg.Message) || minecraft.IsDeathMessage(msg.Message) {
 			cctx, cancel := context.WithTimeout(ctx, *slackWebhookTimeout)
 
 			if err := slackClient.Post(cctx, msg.Message); err != nil {
