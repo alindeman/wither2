@@ -125,3 +125,11 @@ func IsJoinLeaveMessage(msg string) bool {
 func IsChatMessage(msg string) bool {
 	return strings.HasPrefix(msg, "<")
 }
+
+var (
+	advancementMessageMatcher = regexp.MustCompile(`\A\S+ has made the advancement .*\z`)
+)
+
+func IsAdvancementMessage(msg string) bool {
+	return advancementMessageMatcher.MatchString(msg)
+}

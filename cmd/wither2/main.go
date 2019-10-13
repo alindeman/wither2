@@ -88,7 +88,7 @@ func runIngest(ctx context.Context) error {
 			continue
 		}
 
-		if minecraft.IsChatMessage(msg.Message) || minecraft.IsJoinLeaveMessage(msg.Message) || minecraft.IsDeathMessage(msg.Message) {
+		if minecraft.IsChatMessage(msg.Message) || minecraft.IsJoinLeaveMessage(msg.Message) || minecraft.IsDeathMessage(msg.Message) || minecraft.IsAdvancementMessage(msg.Message) {
 			cctx, cancel := context.WithTimeout(ctx, *slackWebhookTimeout)
 
 			if err := slackClient.Post(cctx, msg.Message); err != nil {
