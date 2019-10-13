@@ -127,9 +127,19 @@ func IsChatMessage(msg string) bool {
 }
 
 var (
-	advancementMessageMatcher = regexp.MustCompile(`\A\S+ has made the advancement .*\z`)
+	advancementMessageMatchers = []*regexp.Regexp{
+		regexp.MustCompile(`\A\S+ has made the advancement .*\z`),
+		regexp.MustCompile(`\A\S+ has completed the challenge .*\z`),
+		regexp.MustCompile(`\A\S+ has reached the goal .*\z`),
+	}
 )
 
 func IsAdvancementMessage(msg string) bool {
-	return advancementMessageMatcher.MatchString(msg)
+	for _, re := range advancementMessageMatchers {
+		if re.MatchString(msg) {
+			return true
+		}
+	}
+
+	return false
 }
