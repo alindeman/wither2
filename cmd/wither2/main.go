@@ -160,7 +160,7 @@ func rconSlackForwarderHandler(client *minecraft.Client, slackToken string, slac
 			}
 		}
 
-		text := fmt.Sprintf("<%s on slack> %s", payload.UserName, payload.Text)
+		text := fmt.Sprintf("<%s> %s", payload.UserName, payload.Text)
 		msg, err := json.Marshal(map[string]interface{}{
 			"text": text,
 		})
