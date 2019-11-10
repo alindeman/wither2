@@ -14,7 +14,10 @@ import (
 type Client struct {
 	sync.Mutex
 
-	conn net.Conn
+	network  string
+	addr     string
+	password string
+	conn     net.Conn
 }
 
 const (
@@ -90,23 +93,76 @@ func (p *packet) WriteTo(w io.Writer) (n int, err error) {
 	return w.Write(buf.Bytes())
 }
 
-// New returns a Client. conn is an open connecton to a Minecraft RCON server.
-func New(conn net.Conn) *Client {
+// New returns a Client.
+func New(network string, addr string, password string) *Client {
 	return &Client{
-		conn: conn,
+		network:  network,
+		addr:     addr,
+		password: password,
 	}
 }
 
-func (c *Client) Login(timeout time.Duration, password string) error {
+func (c *Client) Command(timeout time.Duration, command string) error {
 	c.Lock()
 	defer c.Unlock()
 
-	c.conn.SetDeadline(time.Now().Add(timeout))
+	deadline := time.Now().Add(timeout)
+
+	if err := c.ensureConn(deadline); err != nil {
+		return err
+	}
+
+	c.conn.SetDeadline(deadline)
+
+	p := &packet{
+		RequestID: 1,
+		Type:      typeCommand,
+		Payload:   []byte(command),
+	}
+
+	if _, err := p.WriteTo(c.conn); err != nil {
+		c.disconnect() // reconnect next time
+		return fmt.Errorf("failed to write packet: %w", err)
+	}
+
+	reply, err := readPacket(c.conn)
+	if err != nil {
+		c.disconnect() // reconnect next time
+		return fmt.Errorf("failed to read response packet: %w", err)
+	}
+
+	if typeCommandResponse != reply.Type {
+		return fmt.Errorf("expected reply type %v, got %v", typeCommandResponse, reply.Type)
+	} else if p.RequestID != reply.RequestID {
+		return fmt.Errorf("expected request ID %v, got %v", p.RequestID, reply.RequestID)
+	}
+
+	return nil
+}
+
+// ensureConn populates c.conn and performs a login, if needed. Must be
+// called while holding the lock.
+func (c *Client) ensureConn(deadline time.Time) error {
+	if c.conn != nil {
+		return nil
+	}
+
+	dialer := &net.Dialer{
+		Deadline: deadline,
+	}
+
+	conn, err := dialer.Dial(c.network, c.addr)
+	if err != nil {
+		return err
+	}
+
+	// Login routine
+	conn.SetDeadline(deadline)
 
 	p := &packet{
 		RequestID: 1,
 		Type:      typeLogin,
-		Payload:   []byte(password),
+		Payload:   []byte(c.password),
 	}
 
 	if _, err := p.WriteTo(c.conn); err != nil {
@@ -124,35 +180,20 @@ func (c *Client) Login(timeout time.Duration, password string) error {
 		return fmt.Errorf("expected request ID %v, got %v", p.RequestID, reply.RequestID)
 	}
 
+	// Connection is ready to use
+	c.conn = conn
 	return nil
 }
 
-func (c *Client) Command(timeout time.Duration, command string) error {
-	c.Lock()
-	defer c.Unlock()
-
-	c.conn.SetDeadline(time.Now().Add(timeout))
-
-	p := &packet{
-		RequestID: 1,
-		Type:      typeCommand,
-		Payload:   []byte(command),
+// disconnect disconnects and depopulates c.conn. Must be called while
+// locking the lock.
+func (c *Client) disconnect() {
+	if c.conn == nil {
+		return
 	}
 
-	if _, err := p.WriteTo(c.conn); err != nil {
-		return fmt.Errorf("failed to write packet: %w", err)
-	}
+	_ = c.conn.Close()
+	c.conn = nil
 
-	reply, err := readPacket(c.conn)
-	if err != nil {
-		return fmt.Errorf("failed to read response packet: %w", err)
-	}
-
-	if typeCommandResponse != reply.Type {
-		return fmt.Errorf("expected reply type %v, got %v", typeCommandResponse, reply.Type)
-	} else if p.RequestID != reply.RequestID {
-		return fmt.Errorf("expected request ID %v, got %v", p.RequestID, reply.RequestID)
-	}
-
-	return nil
+	return
 }

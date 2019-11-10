@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -29,8 +28,7 @@ var (
 	server           = app.Command("server", "Serve an endpoint for Slack outgoing webhooks, forwarding relevant messages to Minecraft")
 	addr             = server.Flag("addr", "Address to listen on").Envar("ADDR").Default("127.0.0.1").String()
 	port             = server.Flag("port", "Port to listen on").Envar("PORT").Default("8080").Int()
-	rconDialTimeout  = server.Flag("rcon-dial-timeout", "RCON dial timeout").Envar("RCON_DIAL_TIMEOUT").Default("10s").Duration()
-	rconTimeout      = server.Flag("rcon-timeout", "RCON timeout for login and commands").Envar("RCON_TIMEOUT").Default("10s").Duration()
+	rconTimeout      = server.Flag("rcon-timeout", "RCON timeout for connection and commands").Envar("RCON_TIMEOUT").Default("10s").Duration()
 	rconIP           = server.Flag("rcon-ip", "RCON IP address").Envar("RCON_IP").Default("127.0.0.1").String()
 	rconPort         = server.Flag("rnon-port", "RCON port").Envar("RCON_PORT").Default("25575").Int()
 	rconPassword     = server.Flag("rcon-password", "RCON password").Envar("RCON_PASSWORD").Default("minecraft").String()
@@ -103,15 +101,7 @@ func runIngest(ctx context.Context) error {
 }
 
 func runServer(ctx context.Context) error {
-	conn, err := dialRCON(ctx)
-	if err != nil {
-		return err
-	}
-
-	minecraftClient := minecraft.New(conn)
-	if err := minecraftClient.Login(*rconTimeout, *rconPassword); err != nil {
-		return fmt.Errorf("failed to login to RCON: %w", err)
-	}
+	minecraftClient := minecraft.New("tcp", fmt.Sprintf("%s:%d", *rconIP, *rconPort), *rconPassword)
 
 	server := &http.Server{
 		Addr:    fmt.Sprintf("%s:%d", *addr, *port),
@@ -129,14 +119,6 @@ func runServer(ctx context.Context) error {
 	case <-ctx.Done():
 		return server.Shutdown(ctx)
 	}
-}
-
-func dialRCON(ctx context.Context) (net.Conn, error) {
-	dctx, cancel := context.WithTimeout(ctx, *rconDialTimeout)
-	defer cancel()
-
-	var d net.Dialer
-	return d.DialContext(dctx, "tcp", fmt.Sprintf("%s:%d", *rconIP, *rconPort))
 }
 
 func rconSlackForwarderHandler(client *minecraft.Client, slackToken string, slackIgnoreUsers []string) http.Handler {
