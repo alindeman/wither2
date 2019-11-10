@@ -165,11 +165,11 @@ func (c *Client) ensureConn(deadline time.Time) error {
 		Payload:   []byte(c.password),
 	}
 
-	if _, err := p.WriteTo(c.conn); err != nil {
+	if _, err := p.WriteTo(conn); err != nil {
 		return fmt.Errorf("failed to write packet: %w", err)
 	}
 
-	reply, err := readPacket(c.conn)
+	reply, err := readPacket(conn)
 	if err != nil {
 		return fmt.Errorf("failed to read response packet: %w", err)
 	}
